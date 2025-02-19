@@ -3,6 +3,6 @@ numpy>=1.21.0
 networkx>=2.8.0
 openpyxl>=3.0.0  # For Excel file handling
 
-# Spin up venv before installing requirements
+# Spin up venv before installing requirements on Mac
 # python -m venv my-venv
 # my-venv/bin/pip install some-python-library
