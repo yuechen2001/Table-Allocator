@@ -1,6 +1,5 @@
-from collections import defaultdict
 import networkx as nx
-from typing import List, Dict, Set, Tuple
+from typing import List, Set, Dict, Tuple, Union
 import random
 import math
 
@@ -125,48 +124,141 @@ class TableAllocator:
         tables[table1_idx].add(person2)
         tables[table2_idx].add(person1)
     
-    def solve_with_simulated_annealing(self, initial_temperature: float = 100.0,
-                                     cooling_rate: float = 0.995,
-                                     min_temperature: float = 0.01,
-                                     iterations_per_temp: int = 100) -> Dict[int, Set[str]]:
+    def _generate_initial_solution(self) -> List[Set[str]]:
         """
-        Solve the table allocation problem using simulated annealing.
+        Generate an initial random allocation of people to tables.
+        
+        Returns:
+            List[Set[str]]: List of sets representing table allocations
+        """
+        people_list = list(self.people)
+        random.shuffle(people_list)
+        tables = [set() for _ in range(self.num_tables)]
+        
+        person_idx = 0
+        for table_idx in range(self.num_tables):
+            while len(tables[table_idx]) < self.table_size and person_idx < len(people_list):
+                tables[table_idx].add(people_list[person_idx])
+                person_idx += 1
+                
+        return tables
+    
+    def _generate_neighbor(self, current_solution: List[Set[str]]) -> List[Set[str]]:
+        """
+        Generate a neighbor solution by swapping two people.
         
         Args:
-            initial_temperature (float): Starting temperature
-            cooling_rate (float): Rate at which temperature decreases
-            min_temperature (float): Minimum temperature before stopping
-            iterations_per_temp (int): Number of iterations at each temperature
+            current_solution (List[Set[str]]): Current table allocation
             
         Returns:
-            Dict[int, Set[str]]: Final table allocations
+            List[Set[str]]: Neighbor table allocation
         """
-        # Initialize with random allocation
-        current_tables = self._initialize_random_allocation()
-        current_score = self._calculate_satisfaction_score(current_tables)
-        best_tables = [table.copy() for table in current_tables]
+        table1_idx, person1, table2_idx, person2 = self._get_random_swap_candidates(current_solution)
+        new_solution = [table.copy() for table in current_solution]
+        new_solution[table1_idx].remove(person1)
+        new_solution[table2_idx].remove(person2)
+        new_solution[table1_idx].add(person2)
+        new_solution[table2_idx].add(person1)
+        
+        return new_solution
+    
+    def _adjust_temperature(self, temperature: float, accepted_moves: List[int],
+                          window_size: int, initial_temperature: float,
+                          target_acceptance_rate: float = 0.3,
+                          reheat_threshold: float = 0.1) -> float:
+        """
+        Adjust temperature based on acceptance rate of recent moves.
+        
+        Args:
+            temperature: Current temperature
+            accepted_moves: List of recent move acceptances (1 for accepted, 0 for rejected)
+            window_size: Size of window for tracking acceptance rate
+            initial_temperature: Starting temperature (used as cap for reheating)
+            target_acceptance_rate: Target acceptance rate for moves
+            reheat_threshold: Minimum acceptance rate before reheating
+            
+        Returns:
+            float: New temperature
+        """
+        if len(accepted_moves) < window_size:
+            return temperature
+            
+        acceptance_rate = sum(accepted_moves[-window_size:]) / window_size
+        
+        if acceptance_rate > target_acceptance_rate:
+            # Cool down if accepting too many moves
+            return temperature * 0.95
+        elif acceptance_rate < reheat_threshold:
+            # Reheat if accepting too few moves
+            return min(temperature * 1.5, initial_temperature)
+        else:
+            # Gradual cooling
+            return temperature * 0.99
+    
+    def solve_with_simulated_annealing(self, initial_temperature: float = 100.0,
+                                     min_temperature: float = 0.01,
+                                     max_iterations: int = 10000,
+                                     return_temp_history: bool = False) -> Union[Dict[int, Set[str]], Tuple[Dict[int, Set[str]], List[float]]]:
+        """
+        Solve the table allocation problem using simulated annealing with adaptive temperature.
+        
+        Args:
+            initial_temperature: Starting temperature
+            min_temperature: Minimum temperature to stop at
+            max_iterations: Maximum number of iterations
+            return_temp_history: Whether to return temperature history for analysis
+        
+        Returns:
+            If return_temp_history is False: Dictionary mapping table numbers to sets of people
+            If return_temp_history is True: Tuple of (allocation dict, temperature history)
+        """
+        current_solution = self._generate_initial_solution()
+        current_score = self._calculate_satisfaction_score(current_solution)
+        best_solution = current_solution.copy()
         best_score = current_score
         
         temperature = initial_temperature
+        accepted_moves = []
+        temp_history = [temperature] if return_temp_history else None
+        window_size = 100  # Window for tracking acceptance rate
         
-        while temperature > min_temperature:
-            for _ in range(iterations_per_temp):
-                # Get random swap candidates
-                table1_idx, person1, table2_idx, person2 = self._get_random_swap_candidates(current_tables)
-                
-                # Calculate change in score
-                delta = self._try_swap(current_tables, person1, table1_idx, person2, table2_idx)
-                
-                # Accept or reject the swap based on simulated annealing criteria
-                if delta > 0 or random.random() < math.exp(delta / temperature):
-                    self._perform_swap(current_tables, person1, table1_idx, person2, table2_idx)
-                    current_score += delta
-                    
-                    # Update best solution if necessary
-                    if current_score > best_score:
-                        best_tables = [table.copy() for table in current_tables]
-                        best_score = current_score
+        for _ in range(max_iterations):
+            # Generate neighbor solution
+            new_solution = self._generate_neighbor(current_solution)
+            new_score = self._calculate_satisfaction_score(new_solution)
             
-            temperature *= cooling_rate
+            # Calculate acceptance probability
+            delta = new_score - current_score
+            acceptance_prob = min(1.0, math.exp(delta / temperature))
+            
+            # Accept or reject the new solution
+            accepted = random.random() < acceptance_prob
+            if accepted:
+                current_solution = new_solution
+                current_score = new_score
+                
+                if current_score > best_score:
+                    best_solution = current_solution.copy()
+                    best_score = current_score
+            
+            # Track move acceptance and adjust temperature
+            accepted_moves.append(1 if accepted else 0)
+            if len(accepted_moves) > window_size:
+                accepted_moves.pop(0)
+                
+            temperature = self._adjust_temperature(
+                temperature=temperature,
+                accepted_moves=accepted_moves,
+                window_size=window_size,
+                initial_temperature=initial_temperature
+            )
+            
+            if return_temp_history:
+                temp_history.append(temperature)
+            
+            # Stop if temperature is too low
+            if temperature < min_temperature:
+                break
         
-        return {i: table for i, table in enumerate(best_tables)}
+        result = {i: table for i, table in enumerate(best_solution)}
+        return (result, temp_history) if return_temp_history else result

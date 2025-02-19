@@ -3,7 +3,6 @@ import numpy as np
 from table_allocation import TableAllocator
 import os
 from datetime import datetime
-import random
 
 class ExcelTableAllocator:
     def __init__(self, input_file: str):
@@ -76,8 +75,8 @@ class ExcelTableAllocator:
         allocator = self.process_preferences()
         allocation = allocator.solve_with_simulated_annealing(
             initial_temperature=100.0,
-            cooling_rate=0.995,
-            iterations_per_temp=100
+            min_temperature=0.01,
+            max_iterations=10000
         )
         
         # Create results DataFrame
@@ -130,140 +129,21 @@ class ExcelTableAllocator:
             'Satisfaction Rate (%)': (satisfied_preferences / total_preferences * 100) if total_preferences > 0 else 0
         }
 
-def create_test_data():
-    """Create test Excel files in the input_data directory"""
-    test_cases = {
-        'wedding_scenario.xlsx': {
-            'config': {
-                'NumTables': [3],
-                'TableSize': [4],
-                'NumPeople': [10]
-            },
-            'preferences': {
-                'Person': [
-                    'Bride', 'Groom', 'BrideMother', 'BrideFather',
-                    'GroomMother', 'GroomFather', 'BrideSister',
-                    'GroomBrother', 'BrideFriend', 'GroomFriend'
-                ],
-                'Preferences': [
-                    'Groom, BrideMother, BrideFather',
-                    'Bride, GroomMother, GroomFather',
-                    'Bride, BrideFather',
-                    'Bride, BrideMother',
-                    'Groom, GroomFather',
-                    'Groom, GroomMother',
-                    'Bride, BrideMother',
-                    'Groom, GroomFather',
-                    'Bride, BrideSister',
-                    'Groom, GroomBrother'
-                ],
-                'PreferenceWeight': [3.0] * 2 + [2.0] * 4 + [1.5] * 2 + [1.0] * 2
-            }
-        },
-        'corporate_event.xlsx': {
-            'config': {
-                'NumTables': [5],
-                'TableSize': [6],
-                'NumPeople': [28]
-            },
-            'preferences': _generate_corporate_preferences()
-        },
-        'class_reunion.xlsx': {
-            'config': {
-                'NumTables': [4],
-                'TableSize': [5],
-                'NumPeople': [18]
-            },
-            'preferences': _generate_class_reunion_preferences()
-        }
-    }
-    
-    input_dir = 'input_data'
-    os.makedirs(input_dir, exist_ok=True)
-    
-    for filename, data in test_cases.items():
-        filepath = os.path.join(input_dir, filename)
-        with pd.ExcelWriter(filepath) as writer:
-            pd.DataFrame(data['config']).to_excel(writer, sheet_name='Config', index=False)
-            pd.DataFrame(data['preferences']).to_excel(writer, sheet_name='Preferences', index=False)
-        print(f"Created test file: {filename}")
-
-def _generate_corporate_preferences():
-    """Generate preferences for corporate event scenario"""
-    departments = ['Sales', 'Engineering', 'Marketing', 'HR', 'Finance']
-    people = []
-    preferences = []
-    weights = []
-    
-    for dept in departments:
-        for i in range(5 if dept != 'HR' else 3):
-            person = f'{dept}_{i+1}'
-            people.append(person)
-            dept_colleagues = [f'{dept}_{j+1}' for j in range(5 if dept != 'HR' else 3) if f'{dept}_{j+1}' != person]
-            preferences.append(', '.join(dept_colleagues))
-            weights.append(2.0)
-    
-    return {
-        'Person': people,
-        'Preferences': preferences,
-        'PreferenceWeight': weights
-    }
-
-def _generate_class_reunion_preferences():
-    """Generate preferences for class reunion scenario"""
-    groups = {
-        'SportTeam': ['John', 'Mike', 'Sarah', 'Tom'],
-        'StudyGroup': ['Emma', 'Lisa', 'David', 'Alex'],
-        'TheaterClub': ['Sophie', 'James', 'Oliver'],
-        'Others': ['Sam', 'Peter', 'Mary']
-    }
-    
-    people = []
-    preferences = []
-    weights = []
-    
-    for group, members in groups.items():
-        for person in members:
-            people.append(person)
-            group_preferences = [m for m in members if m != person]
-            preferences.append(', '.join(group_preferences))
-            weights.append(2.0 if group != 'Others' else 1.0)
-    
-    return {
-        'Person': people,
-        'Preferences': preferences,
-        'PreferenceWeight': weights
-    }
-
 def process_all_input_files():
     """Process all Excel files in the input_data directory"""
-    input_dir = 'input_data'
-    output_dir = 'output_data'
-    
-    # Ensure directories exist
-    os.makedirs(input_dir, exist_ok=True)
-    os.makedirs(output_dir, exist_ok=True)
+    # Create output directory if it doesn't exist
+    if not os.path.exists('output_data'):
+        os.makedirs('output_data')
     
     # Process each input file
-    for filename in os.listdir(input_dir):
-        if filename.endswith('.xlsx'):
-            print(f"\nProcessing: {filename}")
-            
-            input_path = os.path.join(input_dir, filename)
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            output_filename = f'result_{os.path.splitext(filename)[0]}_{timestamp}.xlsx'
-            output_path = os.path.join(output_dir, output_filename)
-            
-            try:
-                allocator = ExcelTableAllocator(input_path)
-                allocator.solve_and_save(output_path)
-            except Exception as e:
-                print(f"Error processing {filename}: {str(e)}")
+    input_dir = 'input_data'
+    if os.path.exists(input_dir):
+        for filename in os.listdir(input_dir):
+            if filename.endswith('.xlsx'):
+                input_file = os.path.join(input_dir, filename)
+                allocator = ExcelTableAllocator(input_file)
+                allocator.solve_and_save()
+
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == '--create-test-data':
-        create_test_data()
-    else:
-        process_all_input_files()
+    process_all_input_files()
