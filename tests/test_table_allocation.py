@@ -65,6 +65,64 @@ class TestTableAllocation(unittest.TestCase):
         self.assertLess(num_increases, len(temp_history) / 2, 
                       "Temperature increases more often than decreases")
 
+    def test_algorithm_correctness(self):
+        """Test that the algorithm finds optimal solution for a simple case."""
+        # Create a simple problem where optimal solution is known
+        allocator = TableAllocator(num_tables=2, table_size=3, num_people=6)
+        
+        # Create two groups of friends that should sit together
+        group1 = ['A1', 'A2', 'A3']
+        group2 = ['B1', 'B2', 'B3']
+        
+        # Add strong preferences within groups
+        for group in [group1, group2]:
+            for p1 in group:
+                others = [p2 for p2 in group if p2 != p1]
+                allocator.add_preference(p1, others, weight=2.0)
+        
+        # Add weak preferences between groups
+        allocator.add_preference('A1', ['B1'], weight=0.5)
+        allocator.add_preference('A2', ['B2'], weight=0.5)
+        
+        # Solve with fixed seed for deterministic behavior
+        solution = allocator.solve_with_simulated_annealing(
+            initial_temperature=100.0,
+            min_temperature=0.01,
+            max_iterations=1000,
+            random_seed=42
+        )
+        
+        # Convert solution to sets for easier comparison
+        table_sets = [set(solution[i]) for i in range(2)]
+        
+        # Verify that groups are kept together (either configuration is optimal)
+        group1_set = set(group1)
+        group2_set = set(group2)
+        
+        self.assertTrue(
+            (group1_set in table_sets and group2_set in table_sets) or
+            (group1_set in table_sets and group2_set in table_sets),
+            "Algorithm failed to keep strongly connected groups together"
+        )
+        
+        # Calculate satisfaction score
+        score = allocator._calculate_satisfaction_score([solution[i] for i in range(2)])
+        
+        # Debug output
+        print("\nActual solution:")
+        for i, table in solution.items():
+            print(f"Table {i}: {table}")
+        print(f"Score: {score}")
+        
+        # Known optimal score for this configuration
+        # Each person has 2 preferences within their group with weight 2.0
+        # Each person can only see 1 preference when groups are separated
+        optimal_score = 6 * 1 * 2.0  # 6 people × 1 satisfied preference × 2.0 weight = 12.0
+        
+        # Allow for small deviation from optimal
+        self.assertGreaterEqual(score, optimal_score * 0.95,
+                              "Algorithm found significantly suboptimal solution")
+
     def _verify_allocation_validity(self, allocation):
         """Helper method to verify allocation constraints."""
         # Check all tables exist

@@ -198,7 +198,8 @@ class TableAllocator:
     def solve_with_simulated_annealing(self, initial_temperature: float = 100.0,
                                      min_temperature: float = 0.01,
                                      max_iterations: int = 10000,
-                                     return_temp_history: bool = False) -> Union[Dict[int, Set[str]], Tuple[Dict[int, Set[str]], List[float]]]:
+                                     return_temp_history: bool = False,
+                                     random_seed: int = None) -> Union[Dict[int, Set[str]], Tuple[Dict[int, Set[str]], List[float]]]:
         """
         Solve the table allocation problem using simulated annealing with adaptive temperature.
         
@@ -207,11 +208,15 @@ class TableAllocator:
             min_temperature: Minimum temperature to stop at
             max_iterations: Maximum number of iterations
             return_temp_history: Whether to return temperature history for analysis
+            random_seed: Optional seed for random number generation (used in testing)
         
         Returns:
             If return_temp_history is False: Dictionary mapping table numbers to sets of people
             If return_temp_history is True: Tuple of (allocation dict, temperature history)
         """
+        if random_seed is not None:
+            random.seed(random_seed)
+            
         current_solution = self._generate_initial_solution()
         current_score = self._calculate_satisfaction_score(current_solution)
         best_solution = current_solution.copy()
