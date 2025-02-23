@@ -1,149 +1,236 @@
 # Table Allocation Algorithm
 
-This project implements an algorithm to solve the optimal table allocation problem for events where people have seating preferences.
+A smart tool to create optimal seating arrangements for your events by considering people's seating preferences.
 
-## Problem Description
+## Quick Start Guide (For Event Planners)
 
-Given:
-- X tables of size Y each
-- Z people to be seated
-- Each person can specify preferences of people they want to sit with
-- Each preference can have a weight (strength of preference)
+### What This Tool Does
+This tool helps you create the best possible seating arrangements for your events (weddings, corporate events, class reunions, etc.) by:
+- Considering who people want to sit with
+- Making sure tables don't exceed their capacity
+- Maximizing everyone's satisfaction with their seating
 
-The algorithm aims to find the optimal allocation of people to tables that maximizes the total number of satisfied preferences.
+### How to Use
+1. **Prepare Your Input**
+   Create an Excel file with two sheets:
 
-## Project Structure
+   Sheet 1 - Named "Config":
+   | NumTables | TableSize | NumPeople |
+   |-----------|-----------|-----------|
+   | 5         | 8         | 40        |
 
-- `table_allocation.py`: Core algorithm implementation using simulated annealing
-- `table_allocator.py`: Excel interface and test data generation
-- `input_data/`: Directory for input Excel files
-- `output_data/`: Directory for generated allocation results
+   Sheet 2 - Named "Preferences":
+   | Person      | Preferences                  | PreferenceWeight |
+   |-------------|------------------------------|------------------|
+   | John Smith  | Jane Doe, Bob Johnson       | 1.0             |
+   | Jane Doe    | John Smith, Sarah Williams  | 1.0             |
 
-## Excel Interface
+   - `PreferenceWeight`: Use higher numbers (like 2.0) for stronger preferences
 
-### Input Format
-The input Excel file should contain two sheets:
+2. **Get Your Results**
+   - Place your Excel file in the `input_data` folder
+   - Run the program
+   - Find your seating plan in the `output_data` folder
 
-1. **Config Sheet**
-   - NumTables: Number of available tables
-   - TableSize: Size of each table
-   - NumPeople: Total number of people to allocate
+3. **Understanding Results**
+   The output Excel file will contain three sheets:
 
-2. **Preferences Sheet**
-   - Person: Name of the person
-   - Preferences: Comma-separated list of people they prefer to sit with
-   - PreferenceWeight: Weight/strength of the preferences (optional, default=1.0)
+   Sheet 1 - "Allocations":
+   | Table | Person |
+   |-------|--------|
+   | 1     | John   |
+   | 1     | Mike   |
+   | 1     | Tom    |
+   | 1     | Sarah  |
+   | 1     | Peter  |
+   | 2     | Sam    |
+   | 2     | James  |
+   | 2     | Oliver |
+   | 2     | Mary   |
+   | 2     | Sophie |
+   | 3     | Lisa   |
+   | 3     | David  |
+   | 3     | Alex   |
+   | 3     | Emma   |
 
-### Output Format
-The program generates an Excel file with two sheets:
+   Sheet 2 - "Table Summary":
+   | Table | NumPeople |
+   |-------|-----------|
+   | 1     | 5         |
+   | 2     | 5         |
+   | 3     | 4         |
+   | 4     | 0         |
 
-1. **Allocations Sheet**
-   - Table: Assigned table number
-   - Person: Name of the person
+   Sheet 3 - "Satisfaction Metrics":
+   | Metric                  | Value    |
+   |------------------------|----------|
+   | Total Satisfaction     | 42.5     |
+   | Maximum Possible Score | 50.0     |
+   | Satisfaction Rate      | 85.0%    |
+   | Rating                 | Excellent |
 
-2. **Statistics Sheet**
-   - Total Weighted Satisfaction
-   - Satisfied Preferences
-   - Total Possible Pairs
-   - Satisfaction Rate (%)
+   This shows:
+   - Each person's assigned table
+   - Number of people at each table
+   - Overall satisfaction metrics
+   - Quality rating of the solution
 
-## Usage
+### Tips for Best Results
+- Use weights (1.0 - 3.0) to indicate preference strength
+  - 1.0: "Would like to sit together"
+  - 2.0: "Should sit together" (e.g., close friends)
+  - 3.0: "Must sit together" (e.g., couples)
+- Keep preferences realistic (3-4 per person is ideal)
 
-1. Generate test data (optional):
-```python
-python table_allocator.py --create-test-data
+## Using the Executable
+
+### How to Use
+1. **Prepare Your Input**
+   Create an Excel file with two sheets as described above.
+
+2. **Place the Excel File**
+   - Save your Excel file in a `input_data` folder.
+
+3. **Run the Executable**
+   - Double-click the executable file to run it.
+
+4. **Retrieve Your Results**
+   - Find your results in the `output_data` folder.
+   - Open the output Excel file to see your table allocations.
+
+## Technical Documentation
+
+### Algorithm Details
+
+The solution implements a simulated annealing algorithm with adaptive temperature control:
+
+1. **Solution**
+   - Each iteration:
+     - Selects two random people from different tables
+     - Calculates satisfaction delta for potential swap
+     - Accepts/rejects based on:
+       - Better solutions: Always accepted
+       - Worse solutions: Accepted with probability exp(-Δ/T)
+         - Δ: Satisfaction decrease
+         - T: Current temperature
+
+2. **Adaptive Temperature Control**
+   - Initial temperature: 100.0
+   - Monitors acceptance rate
+   - Dynamic temperature adjustment:
+     - Cools when accepting too many suboptimal moves
+     - Reheats if acceptance rate drops too low
+   - Termination at minimum temperature (0.01) or max iterations
+
+3. **Satisfaction Scoring**
+   - Weighted preference satisfaction
+   - Normalized for mutual preferences
+   - Higher weights prioritize certain arrangements
+
+### Project Structure
+
+```
+table-allocator/
+├── table_allocator/
+│   ├── core.py         # Core allocation algorithm
+│   ├── excel_io.py     # Excel file handling
+│   ├── main.py         # Main processing logic
+│   └── utils/
+│       └── test_data.py
+├── tests/
+│   └── test_table_allocation.py
+├── input_data/         # Place Excel files here
+├── output_data/        # Results will appear here
+├── requirements.txt
+└── run.py             # Run this file
 ```
 
-2. Place your input Excel files in the `input_data` directory
+The program uses:
+- `core.py` for the allocation algorithm
+- `excel_io.py` for file operations
+- `main.py` for process coordination
+- `test_data.py` for sample data generation
 
-3. Run the allocator:
-```python
-python table_allocator.py
-```
+### Building the Project
 
-Results will be saved in the `output_data` directory with timestamps.
+#### Creating the Executable
+The project can be packaged into a standalone executable using PyInstaller:
 
-## Testing
+1. **Install PyInstaller**
+   ```bash
+   pip install pyinstaller
+   ```
 
-The project includes several test scenarios to validate the algorithm's performance in different situations:
+2. **Create the Executable**
+   ```bash
+   pyinstaller --onefile run.py
+   ```
 
-### Test Scenarios
+3. **Executable Location**
+   - The executable will be created in the `dist` directory
+   - Package the executable with:
+     - An empty `input_data` directory
+     - An empty `output_data` directory
+     - A copy of the README for instructions
 
-1. **Wedding Scenario** (`wedding_scenario.xlsx`)
-   - 10 people, 3 tables of size 4
-   - Family relationships with weighted preferences
-   - Tests handling of strong preferences (e.g., bride-groom must sit together)
-   - Includes asymmetric family relationships
+4. **Rebuilding Required**
+   Rebuild the executable when updating:
+   - Core algorithm changes
+   - Error handling improvements
+   - Input/output format changes
+   - Dependencies
 
-2. **Corporate Event** (`corporate_event.xlsx`)
-   - 28 people, 5 tables of size 6
-   - Department-based grouping (Sales, Engineering, Marketing, HR, Finance)
-   - Tests handling of large groups
-   - Demonstrates department cohesion while maintaining table size limits
+### Development Setup
 
-3. **Class Reunion** (`class_reunion.xlsx`)
-   - 18 people, 4 tables of size 5
-   - Friend group preferences (Sports Team, Study Group, Theater Club, etc.)
-   - Tests handling of overlapping social circles
-   - Includes some people with fewer preferences
+1. **Environment Setup**
+   ```bash
+   # Create and activate virtual environment
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Install package in development mode
+   pip install -e .
+   ```
 
-### Running Tests
+2. **Dependencies**
+   ```
+   pandas>=1.5.0
+   numpy>=1.21.0
+   networkx>=2.8.0
+   openpyxl>=3.0.0
+   ```
 
-1. Generate test data:
-```python
-python table_allocator.py --create-test-data
-```
+### Testing
 
-2. Process test scenarios:
-```python
-python table_allocator.py
-```
+1. **Test Scenarios**
+   The test suite includes:
+   - Basic allocation test (3 tables, 12 people)
+   - School club event (4 tables, 16 people)
+   - Wedding seating (5 tables, 40 people)
+   - Empty table handling
+   - Strong preferences (couples, groups)
 
-3. Evaluate results:
-   - Check `output_data` directory for results
-   - Each result file includes:
-     - Table assignments
-     - Satisfaction statistics
-     - Performance metrics
+2. **Generate Test Data**
+   ```bash
+   python run.py --create-test
+   ```
+   This creates sample Excel files in `input_data` with different scenarios.
 
-### Interpreting Results
+3. **Run Tests**
+   ```bash
+   python tests/test_table_allocation.py -v
+   ```
+   This runs all tests with verbose output showing:
+   - Test case descriptions
+   - Allocation results
+   - Satisfaction scores
+   - Any errors or failures
 
-The algorithm's performance can be evaluated using:
-
-1. **Satisfaction Rate**: Percentage of preferences satisfied
-   - Above 80%: Excellent
-   - 60-80%: Good
-   - Below 60%: May need parameter tuning
-
-2. **Weighted Satisfaction**: Sum of satisfied preference weights
-   - Higher weights indicate more important preferences were satisfied
-
-3. **Distribution Balance**: Check if tables are evenly filled
-   - Tables should be filled up to their size limit
-   - No overflow or underflow should occur
-
-### Adding Custom Test Cases
-
-To create your own test scenario:
-
-1. Copy one of the existing test files from `input_data`
-2. Modify the Config sheet with your parameters
-3. Update the Preferences sheet with your data
-4. Run the allocator to process your test case
-
-## Algorithm Approach
-
-The solution uses a simulated annealing approach:
-1. Start with a random allocation
-2. Iteratively try to improve the solution by swapping people between tables
-3. Accept improvements and occasionally accept worse solutions to escape local optima
-4. Cool down the temperature to converge to a good solution
-
-## Dependencies
-
-Required Python packages:
-```
-pandas>=1.5.0
-numpy>=1.21.0
-networkx>=2.8.0
-openpyxl>=3.0.0
+3. **Performance Metrics**
+   - Satisfaction Rate:
+     - \>80%: Excellent
+     - 60-80%: Good
+     - <60%: May need parameter tuning

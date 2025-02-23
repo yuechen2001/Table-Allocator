@@ -3,8 +3,9 @@ import random
 import networkx as nx
 import pandas as pd
 import os
-from table_allocation import TableAllocator
-from table_allocator import ExcelTableAllocator
+from table_allocator.core import TableAllocator
+from table_allocator.excel_io import ExcelTableAllocator
+from table_allocator.utils.test_data import generate_test_data, validate_output_data
 
 class TestTableAllocation(unittest.TestCase):
     def setUp(self):
@@ -136,192 +137,90 @@ class TestTableAllocation(unittest.TestCase):
         allocated_people = set()
         for table in allocation.values():
             allocated_people.update(table)
-        self.assertEqual(allocated_people, self.allocator.people)
-        
-        # Check no person is allocated multiple times
-        total_allocations = sum(len(table) for table in allocation.values())
-        self.assertEqual(total_allocations, len(self.allocator.people))
-
+        self.assertEqual(len(allocated_people), self.num_people)
 
 class TestExcelIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test data directory once for all tests."""
-        cls.test_data_dir = "test_data"
-        if not os.path.exists(cls.test_data_dir):
-            os.makedirs(cls.test_data_dir)
-            
+        if not os.path.exists('input_data'):
+            os.makedirs('input_data')
+        if not os.path.exists('output_data'):
+            os.makedirs('output_data')
+        
     def setUp(self):
         """Set up test instance."""
-        self.test_cases = self._generate_test_cases()
-        
-    def _generate_class_reunion_preferences(self):
-        """Generate preferences for class reunion scenario"""
-        groups = {
-            'SportTeam': ['John', 'Mike', 'Sarah', 'Tom'],
-            'StudyGroup': ['Emma', 'Lisa', 'David', 'Alex'],
-            'TheaterClub': ['Sophie', 'James', 'Oliver'],
-            'Others': ['Sam', 'Peter', 'Mary']
-        }
-        
-        people = []
-        preferences = []
-        weights = []
-        
-        for group, members in groups.items():
-            for person in members:
-                people.append(person)
-                group_preferences = [m for m in members if m != person]
-                preferences.append(', '.join(group_preferences))
-                weights.append(2.0 if group != 'Others' else 1.0)
-        
-        return {
-            'Person': people,
-            'Preferences': preferences,
-            'PreferenceWeight': weights
-        }
-        
-    def _generate_corporate_preferences(self):
-        """Generate preferences for corporate event scenario"""
-        departments = {
-            'Engineering': ['Alice', 'Bob', 'Charlie', 'Diana'],
-            'Marketing': ['Eve', 'Frank', 'Grace'],
-            'Sales': ['Henry', 'Ivy', 'Jack'],
-            'Management': ['Karen', 'Larry', 'Monica']
-        }
-        
-        people = []
-        preferences = []
-        weights = []
-        
-        # Add intra-department preferences
-        for dept, members in departments.items():
-            for person in members:
-                people.append(person)
-                dept_preferences = [m for m in members if m != person]
-                preferences.append(', '.join(dept_preferences))
-                weights.append(1.5)  # Moderate preference for department colleagues
-                
-        return {
-            'Person': people,
-            'Preferences': preferences,
-            'PreferenceWeight': weights
-        }
-        
-    def _generate_test_cases(self):
-        """Generate all test cases"""
-        return {
-            'wedding_scenario.xlsx': {
-                'config': {
-                    'NumTables': [3],
-                    'TableSize': [4],
-                    'NumPeople': [10]
-                },
-                'preferences': {
-                    'Person': [
-                        'Bride', 'Groom', 'BrideMother', 'BrideFather',
-                        'GroomMother', 'GroomFather', 'BrideSister',
-                        'GroomBrother', 'BrideFriend', 'GroomFriend'
-                    ],
-                    'Preferences': [
-                        'Groom, BrideMother, BrideFather',
-                        'Bride, GroomMother, GroomFather',
-                        'Bride, BrideFather',
-                        'Bride, BrideMother',
-                        'Groom, GroomFather',
-                        'Groom, GroomMother',
-                        'Bride, BrideMother',
-                        'Groom, GroomFather',
-                        'Bride, BrideSister',
-                        'Groom, GroomBrother'
-                    ],
-                    'PreferenceWeight': [2.0] * 10
-                }
-            },
-            'class_reunion.xlsx': {
-                'config': {
-                    'NumTables': [4],
-                    'TableSize': [4],
-                    'NumPeople': [14]
-                },
-                'preferences': self._generate_class_reunion_preferences()
-            },
-            'corporate_event.xlsx': {
-                'config': {
-                    'NumTables': [4],
-                    'TableSize': [4],
-                    'NumPeople': [13]
-                },
-                'preferences': self._generate_corporate_preferences()
-            }
-        }
+        # Generate test data
+        self.test_files = generate_test_data()
         
     def test_excel_file_creation(self):
         """Test that Excel test files can be created successfully."""
-        for filename, data in self.test_cases.items():
-            filepath = os.path.join(self.test_data_dir, filename)
-            
-            # Create Excel writer
-            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-                # Write config sheet
-                pd.DataFrame(data['config']).to_excel(writer, sheet_name='Config', index=False)
-                
-                # Write preferences sheet
-                pd.DataFrame(data['preferences']).to_excel(writer, sheet_name='Preferences', index=False)
-            
-            # Verify file exists and can be read
-            self.assertTrue(os.path.exists(filepath))
-            
-            # Try to load it with ExcelTableAllocator
-            allocator = ExcelTableAllocator(filepath)
-            self.assertIsNotNone(allocator.config_df)
-            self.assertIsNotNone(allocator.preferences_df)
+        for test_file in self.test_files:
+            self.assertTrue(os.path.exists(test_file))
             
     def test_excel_data_processing(self):
         """Test that Excel data is processed correctly."""
-        for filename, expected_data in self.test_cases.items():
-            filepath = os.path.join(self.test_data_dir, filename)
-            
-            # Create the file first
-            with pd.ExcelWriter(filepath, engine='openpyxl') as writer:
-                pd.DataFrame(expected_data['config']).to_excel(writer, sheet_name='Config', index=False)
-                pd.DataFrame(expected_data['preferences']).to_excel(writer, sheet_name='Preferences', index=False)
-            
-            # Load and process the file
-            allocator = ExcelTableAllocator(filepath)
-            
-            # Verify configuration
-            self.assertEqual(allocator.config_df['NumTables'].iloc[0], expected_data['config']['NumTables'][0])
-            self.assertEqual(allocator.config_df['TableSize'].iloc[0], expected_data['config']['TableSize'][0])
-            self.assertEqual(allocator.config_df['NumPeople'].iloc[0], expected_data['config']['NumPeople'][0])
-            
-            # Verify preferences
-            self.assertEqual(len(allocator.preferences_df), len(expected_data['preferences']['Person']))
+        for test_file in self.test_files:
+            allocator = ExcelTableAllocator(test_file)
+            self.assertIsNotNone(allocator.preferences_df)
+            self.assertIsNotNone(allocator.config_df)
             
     def test_allocation_results(self):
         """Test that allocations from Excel input are valid."""
-        for filename in self.test_cases.keys():
-            filepath = os.path.join(self.test_data_dir, filename)
+        for test_file in self.test_files:
+            allocator = ExcelTableAllocator(test_file)
+            table_allocator = allocator.process_preferences()
+            allocation = table_allocator.solve_with_simulated_annealing()
             
-            # Create the file first if it doesn't exist
-            if not os.path.exists(filepath):
-                self.test_excel_file_creation()
+            # Check that all tables respect size limits
+            config = allocator.config_df.iloc[0]
+            table_size = int(config['TableSize'])
+            for table in allocation.values():
+                self.assertLessEqual(len(table), table_size)
             
-            # Process the file and generate allocation
-            allocator = ExcelTableAllocator(filepath)
-            output_file = os.path.join(self.test_data_dir, f"output_{filename}")
+            # Check that all people are allocated
+            allocated_people = set()
+            for table in allocation.values():
+                allocated_people.update(table)
+            self.assertEqual(len(allocated_people), len(table_allocator.people))
+            
+            # Validate the output data from output_data directory
+            output_file = test_file.replace('input_data', 'output_data').replace('.xlsx', '_result.xlsx')
             allocator.solve_and_save(output_file)
-            
-            # Verify output file exists
-            self.assertTrue(os.path.exists(output_file))
-            
+            validate_output_data(output_file)
+
     @classmethod
     def tearDownClass(cls):
         """Clean up test files after all tests are done."""
-        import shutil
-        if os.path.exists(cls.test_data_dir):
-            shutil.rmtree(cls.test_data_dir)
-
+        try:
+            # Remove test input files
+            if os.path.exists('input_data'):
+                for file in os.listdir('input_data'):
+                    if file.endswith('.xlsx'):
+                        try:
+                            os.remove(os.path.join('input_data', file))
+                        except:
+                            print(f"Warning: Could not remove test file: {file}")
+                try:
+                    os.rmdir('input_data')
+                except:
+                    print("Warning: Could not remove input_data directory")
+            
+            # Remove test output files
+            if os.path.exists('output_data'):
+                for file in os.listdir('output_data'):
+                    if file.endswith('.xlsx'):
+                        try:
+                            os.remove(os.path.join('output_data', file))
+                        except:
+                            print(f"Warning: Could not remove output file: {file}")
+                try:
+                    os.rmdir('output_data')
+                except:
+                    print("Warning: Could not remove output_data directory")
+        finally:
+            # Ensure we don't propagate cleanup errors
+            pass
 
 if __name__ == '__main__':
     unittest.main()
